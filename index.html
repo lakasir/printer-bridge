@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Printer Bridge</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 20px;
+      color: #333;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .status.connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status.disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .server-controls {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    .settings {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: #555;
+    }
+    select, input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+    button.stop {
+      background-color: #dc3545;
+    }
+    button.stop:hover {
+      background-color: #c82333;
+    }
+    .message {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: none;
+    }
+    .message.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Lakasir Printer Bridge</h1>
+    
+    <div id="serverStatus" class="status connected">
+      <strong>HTTP API:</strong> <span id="serverUrl">http://localhost:8888</span><br>
+      <strong>Status:</strong> <span id="statusText">Running</span>
+    </div>
+
+    <div class="server-controls">
+      <button id="startBtn" onclick="startServers()" disabled>Start Server</button>
+      <button id="stopBtn" onclick="stopServers()" class="stop">Stop Server</button>
+    </div>
+
+    <div class="settings">
+      <h2 style="font-size: 16px; margin: 0 0 15px 0;">Printer Settings</h2>
+      
+      <div class="form-group">
+        <label for="printerName">Printer Name:</label>
+        <select id="printerName"></select>
+      </div>
+
+
+
+      <div class="form-group">
+        <label for="paperWidth">Paper Width (characters):</label>
+        <input type="number" id="paperWidth" value="48" min="32" max="80">
+      </div>
+
+      <button onclick="saveSettings()">Save Settings</button>
+      <div id="message" class="message"></div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    async function loadPrinters() {
+      const printers = await ipcRenderer.invoke('get-printers');
+      const select = document.getElementById('printerName');
+      
+      printers.forEach(printer => {
+        const option = document.createElement('option');
+        option.value = printer.name;
+        option.textContent = printer.name;
+        select.appendChild(option);
+      });
+    }
+
+    async function loadSettings() {
+      const settings = await ipcRenderer.invoke('get-settings');
+      document.getElementById('printerName').value = settings.printerName;
+      document.getElementById('paperWidth').value = settings.paperWidth;
+    }
+
+    async function saveSettings() {
+      const settings = {
+        printerName: document.getElementById('printerName').value,
+        paperWidth: parseInt(document.getElementById('paperWidth').value)
+      };
+
+      await ipcRenderer.invoke('save-settings', settings);
+      
+      const message = document.getElementById('message');
+      message.textContent = 'Settings saved successfully!';
+      message.className = 'message success';
+      message.style.display = 'block';
+      
+      setTimeout(() => {
+        message.style.display = 'none';
+      }, 3000);
+    }
+
+    async function startServers() {
+      const result = await ipcRenderer.invoke('start-servers');
+      updateServerStatus(result.running, result.port);
+    }
+
+    async function stopServers() {
+      const result = await ipcRenderer.invoke('stop-servers');
+      updateServerStatus(result.running, result.port);
+    }
+
+    function updateServerStatus(running, port) {
+      const statusDiv = document.getElementById('serverStatus');
+      const statusText = document.getElementById('statusText');
+      const serverUrl = document.getElementById('serverUrl');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+
+      if (port) {
+        serverUrl.textContent = `http://localhost:${port}`;
+      }
+
+      if (running) {
+        statusDiv.className = 'status connected';
+        statusText.textContent = 'Running';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      } else {
+        statusDiv.className = 'status disconnected';
+        statusText.textContent = 'Stopped';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    }
+
+    async function loadServerStatus() {
+      const status = await ipcRenderer.invoke('get-server-status');
+      updateServerStatus(status.running, status.port);
+    }
+
+    ipcRenderer.on('server-status', (event, status) => {
+      updateServerStatus(status.running, status.port);
+    });
+
+    loadPrinters();
+    loadSettings();
+    loadServerStatus();
+  </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+{
+  "name": "lakasir-printer-bridge",
+  "version": "1.0.0",
+  "description": "Printer bridge for Lakasir POS",
+  "main": "main.js",
+  "author": "Lakasir",
+  "scripts": {
+    "postinstall": "electron-builder install-app-deps",
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.lakasir.printer-bridge",
+    "productName": "Lakasir Printer Bridge",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility"
+    }
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "17.2.3",
+    "electron-store": "^8.1.0",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
+    "express": "^4.18.2",
+    "pdf-to-printer": "^5.5.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}

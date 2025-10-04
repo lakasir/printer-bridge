@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Printer Bridge HTTP API Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 20px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      background-color: #fafafa;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 0;
+      color: #555;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button.secondary {
+      background-color: #6c757d;
+    }
+    button.secondary:hover {
+      background-color: #545b62;
+    }
+    button.success {
+      background-color: #28a745;
+    }
+    button.success:hover {
+      background-color: #218838;
+    }
+    .response {
+      margin-top: 15px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-left: 4px solid #007bff;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      display: none;
+    }
+    .response.show {
+      display: block;
+    }
+    .response.error {
+      border-left-color: #dc3545;
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .response.success {
+      border-left-color: #28a745;
+      background-color: #d4edda;
+      color: #155724;
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .status.connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status.disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Printer Bridge HTTP API Test</h1>
+
+    <div id="connectionStatus" class="status disconnected">
+      <strong>Status:</strong> Checking connection...
+    </div>
+
+    <!-- Test 1: Get Printers -->
+    <div class="test-section">
+      <h2>1. Get Available Printers</h2>
+      <button onclick="getPrinters()">Get Printers List</button>
+      <div id="printers-response" class="response"></div>
+    </div>
+
+    <!-- Test 2: Get Settings -->
+    <div class="test-section">
+      <h2>2. Get Current Settings</h2>
+      <button class="secondary" onclick="getSettings()">Get Settings</button>
+      <div id="settings-response" class="response"></div>
+    </div>
+
+    <!-- Test 3: Print Simple Text -->
+    <div class="test-section">
+      <h2>3. Print Simple Text</h2>
+      <textarea id="simple-text" rows="3" placeholder="Enter text to print...">Hello from Lakasir Printer Bridge!</textarea>
+      <button class="success" onclick="printSimpleText()">Print Text</button>
+      <div id="print-simple-response" class="response"></div>
+    </div>
+
+    <!-- Test 4: Print Receipt -->
+    <div class="test-section">
+      <h2>4. Print Sample Receipt</h2>
+      <button class="success" onclick="printReceipt()">Print Receipt</button>
+      <div id="print-receipt-response" class="response"></div>
+    </div>
+
+    <!-- Test 5: Print Custom Items -->
+    <div class="test-section">
+      <h2>5. Print Custom Items (Array)</h2>
+      <textarea id="custom-items" rows="6" placeholder="Enter items (one per line)...">Item 1: Coffee - $3.50
+Item 2: Tea - $2.50
+Item 3: Cake - $5.00
+========================
+Total: $11.00</textarea>
+      <button class="success" onclick="printCustomItems()">Print Items</button>
+      <div id="print-custom-response" class="response"></div>
+    </div>
+
+    <!-- Test 6: Print JSON Data -->
+    <div class="test-section">
+      <h2>6. Test with Raw JSON</h2>
+      <textarea id="raw-json" rows="8" placeholder="Enter JSON data...">{
+  "text": "Header Text",
+  "items": [
+    "Line 1",
+    "Line 2",
+    "Line 3"
+  ]
+}</textarea>
+      <button class="success" onclick="printRawJSON()">Send JSON</button>
+      <div id="print-json-response" class="response"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:5463';
+
+    // Check connection status on load
+    window.addEventListener('load', checkConnection);
+
+    async function checkConnection() {
+      const statusDiv = document.getElementById('connectionStatus');
+      try {
+        const response = await fetch(`${API_URL}/settings`);
+        if (response.ok) {
+          statusDiv.className = 'status connected';
+          statusDiv.innerHTML = '<strong>Status:</strong> Connected to Printer Bridge ✓';
+        } else {
+          statusDiv.className = 'status disconnected';
+          statusDiv.innerHTML = '<strong>Status:</strong> Server error';
+        }
+      } catch (error) {
+        statusDiv.className = 'status disconnected';
+        statusDiv.innerHTML = '<strong>Status:</strong> Not connected. Make sure the app is running (npm start)';
+      }
+    }
+
+    function showResponse(elementId, data, isError = false) {
+      const element = document.getElementById(elementId);
+      element.className = isError ? 'response error show' : 'response success show';
+      element.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    }
+
+    async function getPrinters() {
+      try {
+        const response = await fetch(`${API_URL}/printers`);
+        const data = await response.json();
+        showResponse('printers-response', data);
+      } catch (error) {
+        showResponse('printers-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function getSettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings`);
+        const data = await response.json();
+        showResponse('settings-response', data);
+      } catch (error) {
+        showResponse('settings-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function printSimpleText() {
+      try {
+        const text = document.getElementById('simple-text').value;
+        const response = await fetch(`${API_URL}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          showResponse('print-simple-response', data);
+        } else {
+          showResponse('print-simple-response', data, true);
+        }
+      } catch (error) {
+        showResponse('print-simple-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function printReceipt() {
+      const receiptData = {
+        text: "============================",
+        items: [
+          "      LAKASIR POS",
+          "============================",
+          "",
+          "Date: " + new Date().toLocaleString(),
+          "",
+          "ITEMS:",
+          "1x Coffee.............$3.50",
+          "2x Donut..............$4.00",
+          "1x Sandwich...........$6.50",
+          "",
+          "----------------------------",
+          "Subtotal:............$14.00",
+          "Tax (10%):............$1.40",
+          "----------------------------",
+          "TOTAL:...............$15.40",
+          "",
+          "============================",
+          "   Thank you for visiting!",
+          "============================",
+          ""
+        ]
+      };
+
+      try {
+        const response = await fetch(`${API_URL}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(receiptData)
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          showResponse('print-receipt-response', data);
+        } else {
+          showResponse('print-receipt-response', data, true);
+        }
+      } catch (error) {
+        showResponse('print-receipt-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function printCustomItems() {
+      try {
+        const text = document.getElementById('custom-items').value;
+        const items = text.split('\n').filter(line => line.trim());
+
+        const response = await fetch(`${API_URL}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          showResponse('print-custom-response', data);
+        } else {
+          showResponse('print-custom-response', data, true);
+        }
+      } catch (error) {
+        showResponse('print-custom-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function printRawJSON() {
+      try {
+        const jsonText = document.getElementById('raw-json').value;
+        const jsonData = JSON.parse(jsonText);
+
+        const response = await fetch(`${API_URL}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jsonData)
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          showResponse('print-json-response', data);
+        } else {
+          showResponse('print-json-response', data, true);
+        }
+      } catch (error) {
+        showResponse('print-json-response', `Error: ${error.message}`, true);
+      }
+    }
+  </script>
+</body>
+</html>
