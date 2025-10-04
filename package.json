@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Printer bridge for Lakasir POS",
   "main": "main.js",
-  "author": "Lakasir",
+  "author": {
+    "name": "Lakasir",
+    "email": "lakasir@example.com"
+  },
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
     "start": "electron .",
