@@ -95,6 +95,79 @@
       background-color: #d4edda;
       color: #155724;
     }
+    .logs {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .log-container {
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .log-entry {
+      margin-bottom: 5px;
+      word-wrap: break-word;
+    }
+    .log-entry.error {
+      color: #f48771;
+    }
+    .log-entry.success {
+      color: #4ec9b0;
+    }
+    .log-entry.info {
+      color: #569cd6;
+    }
+    .log-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toggle-switch input[type="checkbox"] {
+      display: none;
+    }
+    .toggle-slider {
+      position: relative;
+      width: 50px;
+      height: 24px;
+      background-color: #ccc;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.3s;
+    }
+    .toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+      background-color: #FF6600;
+    }
+    .toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
+      transform: translateX(26px);
+    }
+    .toggle-label {
+      font-size: 14px;
+      color: #555;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -119,7 +192,14 @@
         <select id="printerName"></select>
       </div>
 
-
+      <div class="form-group">
+        <label class="toggle-label">USB Direct Printing (with status feedback)</label>
+        <div class="toggle-switch">
+          <input type="checkbox" id="useUSB" checked>
+          <div class="toggle-slider" onclick="document.getElementById('useUSB').click()"></div>
+          <span id="toggleStatus" style="font-size: 12px; color: #FF6600; font-weight: bold;">Enabled</span>
+        </div>
+      </div>
 
       <div class="form-group">
         <label for="paperWidth">Paper Width (characters):</label>
@@ -128,6 +208,14 @@
 
       <button onclick="saveSettings()">Save Settings</button>
       <div id="message" class="message"></div>
+    </div>
+
+    <div class="logs">
+      <h2 style="font-size: 16px; margin: 0 0 10px 0;">Process Logs</h2>
+      <div class="log-container" id="logContainer"></div>
+      <div class="log-controls">
+        <button onclick="clearLogs()">Clear Logs</button>
+      </div>
     </div>
   </div>
 
@@ -150,12 +238,31 @@
       const settings = await ipcRenderer.invoke('get-settings');
       document.getElementById('printerName').value = settings.printerName;
       document.getElementById('paperWidth').value = settings.paperWidth;
+      document.getElementById('useUSB').checked = settings.useUSB !== false;
+      updateToggleStatus();
     }
+
+    function updateToggleStatus() {
+      const checkbox = document.getElementById('useUSB');
+      const statusText = document.getElementById('toggleStatus');
+      if (checkbox.checked) {
+        statusText.textContent = 'Enabled';
+        statusText.style.color = '#FF6600';
+      } else {
+        statusText.textContent = 'Disabled';
+        statusText.style.color = '#999';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('useUSB').addEventListener('change', updateToggleStatus);
+    });
 
     async function saveSettings() {
       const settings = {
         printerName: document.getElementById('printerName').value,
-        paperWidth: parseInt(document.getElementById('paperWidth').value)
+        paperWidth: parseInt(document.getElementById('paperWidth').value),
+        useUSB: document.getElementById('useUSB').checked
       };
 
       await ipcRenderer.invoke('save-settings', settings);
@@ -213,9 +320,30 @@
       updateServerStatus(status.running, status.port);
     });
 
+    ipcRenderer.on('log', (event, log) => {
+      addLog(log.message, log.type);
+    });
+
+    function addLog(message, type = 'info') {
+      const logContainer = document.getElementById('logContainer');
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-entry ${type}`;
+      
+      const timestamp = new Date().toLocaleTimeString();
+      logEntry.textContent = `[${timestamp}] ${message}`;
+      
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('logContainer').innerHTML = '';
+    }
+
     loadPrinters();
     loadSettings();
     loadServerStatus();
+    addLog('Application started', 'success');
   </script>
 </body>
 </html>

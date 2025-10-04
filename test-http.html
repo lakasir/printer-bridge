@@ -182,7 +182,7 @@ Total: $11.00</textarea>
   </div>
 
   <script>
-    const API_URL = 'http://localhost:8888';
+    const API_URL = 'http://localhost:5463';
 
     // Check connection status on load
     window.addEventListener('load', checkConnection);
@@ -251,33 +251,40 @@ Total: $11.00</textarea>
     }
 
     async function printReceipt() {
-      const receiptData = {
-        text: "============================",
-        items: [
-          "      LAKASIR POS",
-          "============================",
-          "",
-          "Date: " + new Date().toLocaleString(),
-          "",
-          "ITEMS:",
-          "1x Coffee.............$3.50",
-          "2x Donut..............$4.00",
-          "1x Sandwich...........$6.50",
-          "",
-          "----------------------------",
-          "Subtotal:............$14.00",
-          "Tax (10%):............$1.40",
-          "----------------------------",
-          "TOTAL:...............$15.40",
-          "",
-          "============================",
-          "   Thank you for visiting!",
-          "============================",
-          ""
-        ]
-      };
-
       try {
+        const settingsResponse = await fetch(`${API_URL}/settings`);
+        const settings = await settingsResponse.json();
+        const paperWidth = settings.paperWidth || 32;
+        
+        const separator = "=".repeat(paperWidth);
+        const dashedLine = "-".repeat(paperWidth);
+        
+        const receiptData = {
+          text: separator,
+          items: [
+            "      LAKASIR POS",
+            separator,
+            "",
+            "Date: " + new Date().toLocaleString(),
+            "",
+            "ITEMS:",
+            "1x Coffee.............$3.50",
+            "2x Donut..............$4.00",
+            "1x Sandwich...........$6.50",
+            "",
+            dashedLine,
+            "Subtotal:............$14.00",
+            "Tax (10%):............$1.40",
+            dashedLine,
+            "TOTAL:...............$15.40",
+            "",
+            separator,
+            "   Thank you for visiting!",
+            separator,
+            ""
+          ]
+        };
+
         const response = await fetch(`${API_URL}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

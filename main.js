@@ -2,17 +2,22 @@ require('dotenv').config();
 const { app, BrowserWindow, ipcMain } = require('electron');
 const express = require('express');
 const cors = require('cors');
-const { exec } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const { printer: ThermalPrinter, types: PrinterTypes } = require("node-thermal-printer");
+const printerDriver = require("@thiagoelg/node-printer");
 const Store = require('electron-store');
 
 const store = new Store();
-const HTTP_PORT = process.env.HTTP_PORT || 8888;
+const HTTP_PORT = process.env.HTTP_PORT || 5463;
 let mainWindow;
 let httpServer;
 let serverRunning = false;
+
+function sendLog(message, type = 'info') {
+  console.log(message);
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('log', { message, type });
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -36,18 +41,24 @@ function startHttpServer() {
 
   expressApp.post('/print', async (req, res) => {
     try {
-      console.log('Received HTTP print request:', req.body);
+      sendLog('Received HTTP print request', 'info');
       await printData(req.body);
+      sendLog('Print job completed', 'success');
       res.json({ status: 'success', message: 'Print job completed' });
     } catch (error) {
-      console.error('Error processing print request:', error);
+      sendLog(`Error processing print request: ${error.message}`, 'error');
       res.status(500).json({ status: 'error', message: error.message });
     }
   });
 
-  expressApp.get('/printers', (req, res) => {
-    const printers = printerDriver.getPrinters();
-    res.json({ printers });
+  expressApp.get('/printers', async (req, res) => {
+    try {
+      const printers = await getPrinters();
+      res.json({ printers });
+    } catch (error) {
+      console.error('Error getting printers:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   expressApp.get('/settings', (req, res) => {
@@ -58,7 +69,7 @@ function startHttpServer() {
   });
 
   httpServer = expressApp.listen(HTTP_PORT, () => {
-    console.log(`HTTP server started on http://localhost:${HTTP_PORT}`);
+    sendLog(`HTTP server started on http://localhost:${HTTP_PORT}`, 'success');
   });
 
   serverRunning = true;
@@ -71,7 +82,7 @@ function stopHttpServer() {
   return new Promise((resolve) => {
     if (httpServer) {
       httpServer.close(() => {
-        console.log('HTTP server stopped');
+        sendLog('HTTP server stopped', 'info');
         httpServer = null;
         resolve();
       });
@@ -94,77 +105,45 @@ async function stopServer() {
 }
 
 function getPrinters() {
-  return new Promise((resolve, reject) => {
-    const platform = os.platform();
-    let command;
-
-    if (platform === 'win32') {
-      command = 'wmic printer get name';
-    } else if (platform === 'darwin') {
-      command = 'lpstat -p | awk \'{print $2}\'';
-    } else {
-      command = 'lpstat -p | awk \'{print $2}\'';
-    }
-
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      const printers = stdout
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line && line !== 'Name' && line !== 'printer')
-        .map(name => ({ name }));
-
-      resolve(printers);
-    });
-  });
+  const printers = printerDriver.getPrinters();
+  return printers.map(p => ({ name: p.name }));
 }
 
 async function printData(data) {
   const printerName = store.get('printerName', 'POS_PRINTER');
   const paperWidth = store.get('paperWidth', 48);
 
-  let content = '';
+  let printer = new ThermalPrinter({
+    type: PrinterTypes.EPSON,
+    interface: `printer:${printerName}`,
+    driver: printerDriver,
+    width: paperWidth,
+  });
+
+  const isConnected = await printer.isPrinterConnected();
+  if (!isConnected) {
+    throw new Error("Printer couldn't connect");
+  }
 
   if (data.text) {
-    content += data.text + '\n';
+    printer.println(data.text);
   }
 
   if (data.items && Array.isArray(data.items)) {
-    content += data.items.join('\n') + '\n';
+    data.items.forEach(item => {
+      printer.println(item);
+    });
   }
 
-  const tempFile = path.join(os.tmpdir(), `print-${Date.now()}.txt`);
-  fs.writeFileSync(tempFile, content);
+  printer.cut();
 
-  return new Promise((resolve, reject) => {
-    const platform = os.platform();
-    let command;
-
-    if (platform === 'win32') {
-      command = `powershell -Command "Get-Content '${tempFile}' | Out-Printer -Name '${printerName}'"`;
-    } else if (platform === 'darwin') {
-      command = `lp -d "${printerName}" "${tempFile}"`;
-    } else {
-      command = `lp -d "${printerName}" "${tempFile}"`;
-    }
-
-    exec(command, (error, stdout, stderr) => {
-      fs.unlinkSync(tempFile);
-
-      if (error) {
-        console.error('Print error:', error);
-        reject(error);
-        return;
-      }
-
-      console.log('Printed successfully!');
-      resolve();
-    });
-  });
+  try {
+    await printer.execute();
+    console.log('Printed successfully!');
+  } catch (err) {
+    console.error('Error printing:', err);
+    throw err;
+  }
 }
 
 ipcMain.handle('get-printers', async () => {
