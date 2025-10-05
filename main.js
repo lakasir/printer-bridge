@@ -135,6 +135,25 @@ async function printData(data) {
     });
   }
 
+  if (data.image) {
+    try {
+      const imageBuffer = Buffer.from(data.image, 'base64');
+      await printer.printImage(imageBuffer);
+    } catch (err) {
+      console.error('Error printing image:', err);
+      throw new Error(`Failed to print image: ${err.message}`);
+    }
+  }
+
+  if (data.imageUrl) {
+    try {
+      await printer.printImageUrl(data.imageUrl);
+    } catch (err) {
+      console.error('Error printing image from URL:', err);
+      throw new Error(`Failed to print image from URL: ${err.message}`);
+    }
+  }
+
   printer.cut();
 
   try {

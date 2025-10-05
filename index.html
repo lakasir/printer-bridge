@@ -207,6 +207,7 @@
       </div>
 
       <button onclick="saveSettings()">Save Settings</button>
+      <button onclick="testPrint()" style="margin-left: 10px;">Test Print</button>
       <div id="message" class="message"></div>
     </div>
 
@@ -338,6 +339,80 @@
 
     function clearLogs() {
       document.getElementById('logContainer').innerHTML = '';
+    }
+
+    async function testPrint() {
+      const settings = await ipcRenderer.invoke('get-settings');
+      const status = await ipcRenderer.invoke('get-server-status');
+      const message = document.getElementById('message');
+      
+      try {
+        message.textContent = 'Sending test print...';
+        message.className = 'message success';
+        message.style.display = 'block';
+        
+        const paperWidth = settings.paperWidth || 32;
+        const separator = '='.repeat(paperWidth);
+        const center = (text) => {
+          const len = text.length;
+          if (len >= paperWidth) return text.slice(0, paperWidth);
+          const spaces = Math.floor((paperWidth - len) / 2);
+          return ' '.repeat(spaces) + text;
+        };
+        
+        const items = [
+          separator,
+          center('TEST PRINT'),
+          separator,
+          '',
+          'Printer: ' + settings.printerName,
+          'Paper Width: ' + paperWidth + ' chars',
+          'USB Mode: ' + (settings.useUSB ? 'Enabled' : 'Disabled'),
+          '',
+          'Date: ' + new Date().toLocaleString(),
+          '',
+          separator,
+          center('Image Test'),
+          separator
+        ];
+
+        const testImageSvg = `<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="#FF6600"/>
+          <text x="50" y="50" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle">LOGO</text>
+        </svg>`;
+        const base64Image = btoa(testImageSvg);
+        
+        const response = await fetch(`http://localhost:${status.port}/print`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            items,
+            imageUrl: 'https://via.placeholder.com/150/FF6600/FFFFFF?text=Lakasir'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          message.textContent = 'Test print sent successfully!';
+          message.className = 'message success';
+          addLog('Test print completed', 'success');
+        } else {
+          throw new Error(result.message || 'Print failed');
+        }
+      } catch (error) {
+        message.textContent = 'Test print failed: ' + error.message;
+        message.className = 'message error';
+        message.style.backgroundColor = '#f8d7da';
+        message.style.color = '#721c24';
+        addLog('Test print failed: ' + error.message, 'error');
+      }
+      
+      setTimeout(() => {
+        message.style.display = 'none';
+      }, 3000);
     }
 
     loadPrinters();

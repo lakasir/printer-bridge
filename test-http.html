@@ -165,9 +165,25 @@ Total: $11.00</textarea>
       <div id="print-custom-response" class="response"></div>
     </div>
 
-    <!-- Test 6: Print JSON Data -->
+    <!-- Test 6: Print Image from URL -->
     <div class="test-section">
-      <h2>6. Test with Raw JSON</h2>
+      <h2>6. Print Image from URL</h2>
+      <input type="text" id="image-url" placeholder="Enter image URL..." value="https://via.placeholder.com/150" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+      <button class="success" onclick="printImageUrl()">Print Image URL</button>
+      <div id="print-image-url-response" class="response"></div>
+    </div>
+
+    <!-- Test 7: Print Image from File -->
+    <div class="test-section">
+      <h2>7. Print Image from File (Base64)</h2>
+      <input type="file" id="image-file" accept="image/*" style="margin-bottom: 10px;">
+      <button class="success" onclick="printImageFile()">Print Image File</button>
+      <div id="print-image-file-response" class="response"></div>
+    </div>
+
+    <!-- Test 8: Print JSON Data -->
+    <div class="test-section">
+      <h2>8. Test with Raw JSON</h2>
       <textarea id="raw-json" rows="8" placeholder="Enter JSON data...">{
   "text": "Header Text",
   "items": [
@@ -250,57 +266,105 @@ Total: $11.00</textarea>
       }
     }
 
+    // Receipt text formatter
+    function createFormatter(paperWidth = 32) {
+      const repeat = (char) => char.repeat(paperWidth);
+
+      const center = (text) => {
+        const len = text.length;
+        if (len >= paperWidth) return text.slice(0, paperWidth);
+        const spaces = Math.floor((paperWidth - len) / 2);
+        return " ".repeat(spaces) + text;
+      };
+
+      const table2 = (left, right) => {
+        const total = paperWidth;
+        const leftText = left.slice(0, total);
+        const spaceCount = total - leftText.length - right.length;
+        const spaces = spaceCount > 0 ? " ".repeat(spaceCount) : "";
+        return `${leftText}${spaces}${right}`;
+      };
+
+      const table3 = (col1, col2, col3, widths = [6, 18, 8]) => {
+        // widths must sum to paperWidth
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        if (totalWidth !== paperWidth) {
+          throw new Error(`Sum of column widths (${totalWidth}) must equal paperWidth (${paperWidth})`);
+        }
+
+        const c1 = col1.toString().padEnd(widths[0]).slice(0, widths[0]);
+        const c2 = col2.toString().padEnd(widths[1]).slice(0, widths[1]);
+        const c3 = col3.toString().padStart(widths[2]).slice(0, widths[2]);
+        return `${c1}${c2}${c3}`;
+      };
+
+      return { repeat, center, table2, table3 };
+    }
+
     async function printReceipt() {
       try {
         const settingsResponse = await fetch(`${API_URL}/settings`);
         const settings = await settingsResponse.json();
         const paperWidth = settings.paperWidth || 32;
-        
-        const separator = "=".repeat(paperWidth);
-        const dashedLine = "-".repeat(paperWidth);
-        
-        const receiptData = {
-          text: separator,
-          items: [
-            "      LAKASIR POS",
-            separator,
-            "",
-            "Date: " + new Date().toLocaleString(),
-            "",
-            "ITEMS:",
-            "1x Coffee.............$3.50",
-            "2x Donut..............$4.00",
-            "1x Sandwich...........$6.50",
-            "",
-            dashedLine,
-            "Subtotal:............$14.00",
-            "Tax (10%):............$1.40",
-            dashedLine,
-            "TOTAL:...............$15.40",
-            "",
-            separator,
-            "   Thank you for visiting!",
-            separator,
-            ""
-          ]
-        };
+
+        const f = createFormatter(paperWidth);
+        const separator = f.repeat("=");
+        const dashedLine = f.repeat("-");
+
+        const items = [
+          { name: "Coffee", qty: 1, price: 3.5 },
+          { name: "Donut", qty: 2, price: 4.0 },
+          { name: "Sandwich", qty: 1, price: 6.5 },
+        ];
+
+        let lines = [];
+        lines.push(f.center("LAKASIR POS"));
+        lines.push(separator);
+        lines.push(f.table2("Date:", new Date().toLocaleString()));
+        lines.push("");
+        lines.push(f.center("ITEMS"));
+        lines.push(dashedLine);
+        lines.push(f.table3("QTY", "ITEM", "PRICE"));
+
+        let subtotal = 0;
+        items.forEach((item) => {
+          const total = item.qty * item.price;
+          subtotal += total;
+          lines.push(f.table3(item.qty, item.name, `$${total.toFixed(2)}`));
+        });
+
+        const tax = subtotal * 0.1;
+        const total = subtotal + tax;
+
+        lines.push(dashedLine);
+        lines.push(f.table2("Subtotal:", `$${subtotal.toFixed(2)}`));
+        lines.push(f.table2("Tax (10%):", `$${tax.toFixed(2)}`));
+        lines.push(dashedLine);
+        lines.push(f.table2("TOTAL:", `$${total.toFixed(2)}`));
+        lines.push(separator);
+        lines.push(f.center("Thank you for visiting!"));
+        lines.push(separator);
+
+        const receiptData = { text: separator, items: lines };
 
         const response = await fetch(`${API_URL}/print`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(receiptData)
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(receiptData),
         });
-        const data = await response.json();
 
+        const data = await response.json();
         if (response.ok) {
-          showResponse('print-receipt-response', data);
+          showResponse("print-receipt-response", data);
         } else {
-          showResponse('print-receipt-response', data, true);
+          showResponse("print-receipt-response", data, true);
         }
       } catch (error) {
-        showResponse('print-receipt-response', `Error: ${error.message}`, true);
+        showResponse("print-receipt-response", `Error: ${error.message}`, true);
       }
     }
+
+
 
     async function printCustomItems() {
       try {
@@ -321,6 +385,75 @@ Total: $11.00</textarea>
         }
       } catch (error) {
         showResponse('print-custom-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function printImageUrl() {
+      try {
+        const imageUrl = document.getElementById('image-url').value;
+        if (!imageUrl) {
+          showResponse('print-image-url-response', 'Please enter an image URL', true);
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            text: "Image from URL:",
+            imageUrl 
+          })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          showResponse('print-image-url-response', data);
+        } else {
+          showResponse('print-image-url-response', data, true);
+        }
+      } catch (error) {
+        showResponse('print-image-url-response', `Error: ${error.message}`, true);
+      }
+    }
+
+    async function printImageFile() {
+      try {
+        const fileInput = document.getElementById('image-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+          showResponse('print-image-file-response', 'Please select an image file', true);
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          try {
+            const base64Image = e.target.result.split(',')[1];
+            
+            const response = await fetch(`${API_URL}/print`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                text: `Image from file: ${file.name}`,
+                image: base64Image
+              })
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+              showResponse('print-image-file-response', data);
+            } else {
+              showResponse('print-image-file-response', data, true);
+            }
+          } catch (error) {
+            showResponse('print-image-file-response', `Error: ${error.message}`, true);
+          }
+        };
+        
+        reader.readAsDataURL(file);
+      } catch (error) {
+        showResponse('print-image-file-response', `Error: ${error.message}`, true);
       }
     }
 

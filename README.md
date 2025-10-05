@@ -84,9 +84,11 @@ fetch('http://localhost:8888/settings')
 
 ## Data Format
 
-Send JSON with either:
+Send JSON with any combination of:
 - `text`: Single string to print
 - `items`: Array of strings (each on new line)
+- `image`: Base64 encoded image string
+- `imageUrl`: URL to image to print
 
 ```json
 {
@@ -99,6 +101,24 @@ or
 ```json
 {
   "items": ["Line 1", "Line 2", "Line 3"]
+}
+```
+
+or
+
+```json
+{
+  "text": "Order #123",
+  "image": "iVBORw0KGgoAAAANSUhEUgAAAAUA..."
+}
+```
+
+or
+
+```json
+{
+  "text": "Company Logo",
+  "imageUrl": "https://example.com/logo.png"
 }
 ```
 
